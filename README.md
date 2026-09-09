@@ -1,23 +1,8 @@
-# Learning Partner
+# learning-partner
 
-A [Claude Code](https://claude.com/claude-code) skill that turns Claude into a tutor whose job is not to explain things well. Its job is to make your own understanding visible to you, so you can steer your learning instead of the tutor steering it.
+A Claude Code skill for learning technical topics and actually retaining them.
 
-The enemy is the illusion of competence. A clear explanation *feels* like understanding: you nod, say "makes sense," and two days later can't write the thing from memory. Nearly every move in this skill exists to break that illusion early, while it's cheap to fix.
-
-**Ask before tell.** It finds out what you already believe before teaching, then makes you produce it back: explain it, predict what code does, write it without looking.
-
-**Do before discuss.** Every concept becomes a few lines you write and run yourself, then justify. Your fingers write the concept; the tutor writes the scaffolding.
-
-## What a session looks like
-
-- **New topic** — two anchor questions (what will you build with it, what's your environment), research on the *current* version of the thing, a scope you sign off on: a target level, a small project that grows across sessions, a 3–8 session roadmap ending in a blank-file rebuild.
-- **Deep dive** (30–60 min) — retrieval check on last time, then chunks of *predict → teach → do → explain why*, then 3–5 mixed retrieval questions graded blind by an examiner that never sees the transcript.
-- **Micro-session** (10–15 min) — one question, one chunk, one log line.
-- **Review** — spaced retrieval across whatever's due, interleaved, always one hands-on. No new material.
-
-Every retrieval question asks for a confidence rating first. The examiner compares confidence against results, so you learn not just what you know but where you're overconfident.
-
-The tutor is audited. After each deep dive an auditor grades it against twelve numbered rules (`rules.md`): never wrote your lines, predicted before explaining, one question per message, poker face during evaluation. A rule broken twice produces a proposed rewording. That's how the skill improves: from evidence, not from opinion.
+It doesn't lecture. It asks what you think first, makes you write the code, grades you blind, and schedules spaced reviews. Your notes and exercises stay on disk.
 
 ## Install
 
@@ -26,72 +11,89 @@ git clone https://github.com/Bytevardas/learning-partner-skill ~/.claude/skills/
 mkdir -p ~/learning
 ```
 
-Notes go in `~/learning/` by default. To put them elsewhere (an Obsidian vault, a synced folder), set the root in your shell profile:
+Optional: keep notes somewhere else, e.g. an Obsidian vault.
 
 ```sh
-export LEARNING_PARTNER_ROOT="$HOME/path/to/notes"
+export LEARNING_PARTNER_ROOT="$HOME/vault/learning"
 ```
 
-Requirements: Claude Code, Python 3 (for `scripts/due.py`), and whatever toolchain the topic needs (Go, Python, Cargo — the tutor sets up a scratch project per topic).
+Needs Python 3 for the scripts, plus the toolchain of whatever you're learning.
 
-## Use
+## Usage
 
-In Claude Code, just say what you want:
-
-| You say | What happens |
-|---|---|
-| "teach me Go generics", "I want to really understand the borrow checker" | New topic, or a deep dive if it exists |
-| "quick one — remind me how channels block" | Micro-session |
-| "what's due", "quiz me", "review" | Review mode across due topics |
-| "pick up where we left off" | Continues the roadmap |
-| "just explain it, I'm short on time" | You get an explanation; the check moves to next session |
-
-The tutor reads your profile and the topic log first, so every session starts where the last one ended.
-
-## What it writes
+Start a topic:
 
 ```
-<learning root>/
-  profile.md              how you learn, across topics: what works, calibration, recurring patterns
-  tutor-notes.md          the skill's own log: recurring drift and proposed rule edits
-  <topic-slug>/
-    log.md                scope, roadmap, prior beliefs → corrections, open questions, session history
-    research.md           the tutor's teaching prep, verified by running it, under 1,000 words
-    workbench.nosync/     runnable exercises, one file per session — yours to keep
+> teach me Go slices properly
+
+Two quick questions. What are you going to use them for, and which Go version / OS?
+
+> a transaction ledger for a side project, Go 1.25, macOS
+
+Setting up a scratch project and checking the behaviours I'll teach on 1.25. Back in a minute.
 ```
 
-Everything is plain markdown. Inside an Obsidian vault the notes also get wikilinks, callouts, and queryable frontmatter.
+It comes back with a scope: target level, a small project that grows session by session, 3–8 sessions, out of scope. You adjust, it starts.
 
-`workbench.nosync/` stays on the machine that created it (the `.nosync` suffix keeps iCloud Drive from syncing build artifacts). Hands-on re-tests need that machine.
+A chunk in a session:
+
+```
+Before I explain anything: a := make([]int, 3, 8); b := append(a, 9); b[0] = 42.
+What does a[0] print, and how sure are you?
+
+> 0, pretty sure. append makes a new array
+
+42. There was spare capacity, so append wrote into the same array and handed
+back a longer header. Your model had append copying every time; it only
+copies when cap runs out.
+
+Exercise: workbench.nosync/session-02-ledger/report.go has a stub
+RecentHistory(n). Make it return the last n entries without exposing the
+ledger's backing array. Tell me when it's in.
+```
+
+You write the lines. It runs them. If it fails, it asks what you think went wrong instead of fixing it.
+
+Other things to say:
+
+```
+> what's due                 spaced reviews across topics, 10–15 min
+> quiz me on rust lifetimes  review one topic
+> quick one: how do Go channels block   micro-session
+> just explain it            you get the explanation; the check moves to next session
+```
+
+Sessions end with retrieval questions. You rate confidence 1–5 before each answer, then an examiner that never saw the session grades them. You get verdicts, a calibration table, and the next review date.
+
+## Files
+
+```
+~/learning/
+  profile.md            how you learn: what works, where you're overconfident
+  tutor-notes.md        rule changes the auditor has proposed
+  go-slices/
+    log.md              scope, roadmap, misconceptions caught, session history
+    research.md         the tutor's prep, verified by running it
+    workbench.nosync/   your exercises, one file per session
+```
+
+Plain markdown. In an Obsidian vault you also get wikilinks and backlinks.
 
 ## Scripts
 
 ```sh
-python3 scripts/due.py            # overdue, due today, upcoming
-python3 scripts/due.py --all      # every topic, plus roadmap sessions remaining across active ones
-python3 scripts/due.py --stats    # retention and first-try rates per topic
-python3 scripts/due.py --check    # lint logs and research: unparseable lines, oversize research, missing workbench
-python3 scripts/due.py --ics f.ics   # review dates as a calendar file
-python3 scripts/due.py --where    # which learning root it's using
+python3 scripts/due.py          # what's due
+python3 scripts/due.py --stats  # retention per topic
+python3 scripts/due.py --check  # lint logs and research
+python3 scripts/due.py --all    # every topic + sessions remaining
 ```
 
-The tutor runs these itself. `--stats` retention (retrieval passed over asked) is the one number that says whether any of this is working.
+## How it stays honest
 
-## Agents
+`rules.md` has twelve rules the tutor is graded against after every deep dive: never write the learner's lines, predict before teach, one question per message, poker face while collecting answers. A rule broken twice gets a proposed rewording in `tutor-notes.md`. Edit `rules.md` when the evidence says to.
 
-Four briefs in `agents/`, used when Claude Code can spawn subagents. Without subagents the tutor follows each brief itself.
+`agents/` holds the briefs for the researcher, critic, examiner, and auditor. Without subagents the tutor follows them itself.
 
-- **researcher** — reads current docs, changelog, and source for *your* version, verifies claims by running them, drafts the scope. Volatile topics only.
-- **critic** — tries to break `research.md` before you learn from it. The researcher, tutor, and examiner are the same model; this is the one pass looking for their shared mistake.
-- **examiner** — grades your retrieval answers without the teaching transcript, so it hears only what you said, not what the tutor meant.
-- **auditor** — grades the tutor against `rules.md` and proposes rule changes when drift recurs.
+## Not for
 
-## Tuning it
-
-`rules.md` is the contract. Edit it when the auditor shows a rule isn't holding; `tutor-notes.md` in your learning root accumulates the evidence. `references/techniques.md` is the probe catalog; `references/example-new-topic.md` shows what a compact new-topic setup looks like.
-
-## What it is not
-
-- **Not a lecturer.** It explains less than you might want, on purpose. If you want a good explanation and nothing else, ask for one.
-- **Not cheap.** A deep dive is an hour of your attention. It only pays off if you do the spaced reviews.
-- **Not for your real code.** Building and debugging real work, or weighing design choices, belong to other modes. This one learns; graduation hands off.
+Building or debugging real code, or design decisions. This skill learns; when a topic is done it hands off to real work.
